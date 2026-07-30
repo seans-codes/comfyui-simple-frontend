@@ -10,13 +10,33 @@ import random
 
 # Load configuration from config.yaml
 def load_config(config_path: str = "config.yaml") -> Dict:
-    with open(config_path, "r") as config_file:
+    with open(config_path, "r", encoding="utf-8-sig") as config_file:
         return yaml.safe_load(config_file)
 
 # Load the workflow from a JSON file specified in the config
 def load_workflow(workflow_path: str) -> Dict:
-    with open(workflow_path, "r") as workflow_file:
+    with open(workflow_path, "r", encoding="utf-8-sig") as workflow_file:
         return json.load(workflow_file)
+
+# Keys different node types use for their text prompt input.
+# Add more here if you use other custom nodes.
+PROMPT_INPUT_KEYS = ("text", "value", "string", "prompt")
+
+def set_prompt_text(workflow: Dict, node_id: str, prompt_text: str):
+    """
+    Sets the prompt text on a node, regardless of which input key
+    that node type uses (e.g. CLIPTextEncode uses 'text',
+    PrimitiveString uses 'value').
+    """
+    inputs = workflow[node_id]["inputs"]
+    for key in PROMPT_INPUT_KEYS:
+        if key in inputs:
+            inputs[key] = prompt_text
+            return
+    raise KeyError(
+        f"Node '{node_id}' has none of the expected prompt keys {PROMPT_INPUT_KEYS}. "
+        f"Found keys: {list(inputs.keys())}. Add the correct key name to PROMPT_INPUT_KEYS."
+    )
 
 # Queue the prompt on the server
 def queue_prompt(prompt: Dict, server_address: str, client_id: str) -> Dict:
@@ -61,7 +81,7 @@ def generate_image(prompt_text: str, config_path: str = "config.yaml", output_di
     workflow = load_workflow(workflow_path)
 
     # Modify the workflow with the prompt text and noise seed
-    workflow[prompt_node_id]["inputs"]["text"] = prompt_text
+    set_prompt_text(workflow, prompt_node_id, prompt_text)
     randomize_noise_seed(workflow, seed_node_id)
 
     # Set up WebSocket connection
